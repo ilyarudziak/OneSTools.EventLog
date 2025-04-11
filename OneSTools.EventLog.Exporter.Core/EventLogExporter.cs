@@ -1,12 +1,14 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NodaTime;
+using OneSTools.EventLog.Exporter.Core.UserServices;
 
 namespace OneSTools.EventLog.Exporter.Core
 {
@@ -29,16 +31,19 @@ namespace OneSTools.EventLog.Exporter.Core
         private string _currentLgpFile;
 
         private bool _disposedValue;
+        
+        private readonly IUserService _userService;
 
         // DataFlow blocks
         private EventLogReader _eventLogReader;
         private ActionBlock<EventLogItem[]> _writeBlock;
 
-        public EventLogExporter(EventLogExporterSettings settings, IEventLogStorage storage,
+        public EventLogExporter(EventLogExporterSettings settings, IUserService userService, IEventLogStorage storage, 
             ILogger<EventLogExporter> logger = null)
         {
             _logger = logger;
             _storage = storage;
+            _userService = userService;
 
             _logFolder = settings.LogFolder;
             _portion = settings.Portion;
@@ -52,28 +57,21 @@ namespace OneSTools.EventLog.Exporter.Core
             CheckSettings();
         }
 
-        public EventLogExporter(ILogger<EventLogExporter> logger, IConfiguration configuration,
-            IEventLogStorage storage)
+        public EventLogExporter(ILogger<EventLogExporter> logger, IOptions<EventLogExporterSettings> settings,
+            IEventLogStorage storage, IUserService userService)
         {
             _logger = logger;
             _storage = storage;
+            _userService = userService;
 
-            _logFolder = configuration.GetValue("Exporter:LogFolder", "");
-            _portion = configuration.GetValue("Exporter:Portion", 10000);
-            _writingMaxDop = configuration.GetValue("Exporter:WritingMaxDegreeOfParallelism", 1);
-            _collectedFactor = configuration.GetValue("Exporter:CollectedFactor", 2);
-            _loadArchive = configuration.GetValue("Exporter:LoadArchive", false);
-            _readingTimeout = configuration.GetValue("Exporter:ReadingTimeout", 1);
-            _skipEventsBeforeDate = configuration.GetValue("Exporter:SkipEventsBeforeDate", DateTime.MinValue);
-
-            var timeZone = configuration.GetValue("Exporter:TimeZone", "");
-
-            if (!string.IsNullOrWhiteSpace(timeZone))
-            {
-                var zone = DateTimeZoneProviders.Tzdb.GetZoneOrNull(timeZone);
-
-                _timeZone = zone ?? throw new Exception($"\"{timeZone}\" is unknown time zone");
-            }
+            _logFolder = settings.Value.LogFolder;
+            _portion = settings.Value.Portion;
+            _writingMaxDop = settings.Value.WritingMaxDop;
+            _collectedFactor = settings.Value.CollectedFactor;
+            _loadArchive = settings.Value.LoadArchive;
+            _timeZone = settings.Value.TimeZone;
+            _readingTimeout = settings.Value.ReadingTimeout;
+            _skipEventsBeforeDate = settings.Value.SkipEventsBeforeDate;
 
             CheckSettings();
         }
@@ -131,6 +129,15 @@ namespace OneSTools.EventLog.Exporter.Core
 
                     if (item != null)
                     {
+                        if (!string.IsNullOrEmpty(item.UserUuid))
+                        {
+                            var userMail = _userService.GetUserNameByUid(item.UserUuid);
+                            if (!string.IsNullOrEmpty(userMail))
+                            {
+                                item.UserEmail = userMail;
+                            }
+                        }
+                        
                         await SendAsync(_batchBlock, item, cancellationToken);
 
                         if (!string.IsNullOrEmpty(_eventLogReader.LgpFileName) &&

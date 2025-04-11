@@ -11,6 +11,7 @@ using NodaTime;
 using OneSTools.EventLog.Exporter.Core;
 using OneSTools.EventLog.Exporter.Core.ClickHouse;
 using OneSTools.EventLog.Exporter.Core.ElasticSearch;
+using OneSTools.EventLog.Exporter.Core.UserServices;
 
 namespace OneSTools.EventLog.Exporter.Manager
 {
@@ -43,6 +44,7 @@ namespace OneSTools.EventLog.Exporter.Manager
         private readonly DateTimeZone _timeZone = DateTimeZoneProviders.Tzdb.GetSystemDefault();
         private readonly int _writingMaxDop;
         private readonly DateTime _skipEventsBeforeDate;
+        private readonly string _userFilePath;
 
         public ExportersManager(ILogger<ExportersManager> logger, IServiceProvider serviceProvider,
             IConfiguration configuration)
@@ -58,6 +60,7 @@ namespace OneSTools.EventLog.Exporter.Manager
             _loadArchive = configuration.GetValue("Exporter:LoadArchive", false);
             _readingTimeout = configuration.GetValue("Exporter:ReadingTimeout", 1);
             _skipEventsBeforeDate = configuration.GetValue("Exporter:SkipEventsBeforeDate", DateTime.MinValue);
+            _userFilePath = configuration.GetValue("Exporter:UserPath", string.Empty);
 
             var timeZone = configuration.GetValue("Exporter:TimeZone", "");
 
@@ -162,7 +165,7 @@ namespace OneSTools.EventLog.Exporter.Manager
                         var cts = new CancellationTokenSource();
                         var logger =
                             (ILogger<EventLogExporter>)_serviceProvider.GetService(typeof(ILogger<EventLogExporter>));
-
+                        var userService = (IUserService)_serviceProvider.GetService(typeof(IUserService));
                         var settings = new EventLogExporterSettings
                         {
                             LogFolder = logFolder,
@@ -172,7 +175,8 @@ namespace OneSTools.EventLog.Exporter.Manager
                             ReadingTimeout = _readingTimeout,
                             TimeZone = _timeZone,
                             WritingMaxDop = _writingMaxDop,
-                            SkipEventsBeforeDate = _skipEventsBeforeDate
+                            SkipEventsBeforeDate = _skipEventsBeforeDate,
+                            UserFilePath = _userFilePath
                         };
 
                         Task.Factory.StartNew(async () =>
@@ -182,7 +186,7 @@ namespace OneSTools.EventLog.Exporter.Manager
                                 try
                                 {
                                     using var storage = GetStorage(dataBaseName);
-                                    using var exporter = new EventLogExporter(settings, storage, logger);
+                                    using var exporter = new EventLogExporter(settings, userService, storage, logger);
                                     await exporter.StartAsync(cts.Token);
                                 }
                                 catch (TaskCanceledException)

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using OneSTools.EventLog.Exporter.Core;
 using OneSTools.EventLog.Exporter.Core.ClickHouse;
 using OneSTools.EventLog.Exporter.Core.ElasticSearch;
+using OneSTools.EventLog.Exporter.Core.UserServices;
 
 namespace OneSTools.EventLog.Exporter
 {
@@ -50,9 +51,17 @@ namespace OneSTools.EventLog.Exporter
                             throw new Exception($"{storageType} is not available value of StorageType enum");
                     }
 
+                    services.Configure<EventLogExporterSettings>(hostContext.Configuration.GetSection("Exporter"));
+                    services.Configure<UserOptions>(hostContext.Configuration.GetSection("UserCache"));
+                    services.AddTransient<IUserService, UserService>();
+                    services.AddSingleton<IUserCache, UserCache>();
+                    services.AddTransient<IDateTimeProvider, DateTimeProvider>();
                     services.AddTransient<EventLogExporter>();
+                    
                     services.AddHostedService<EventLogExporterService>();
                 });
+            
+            
         }
     }
 }

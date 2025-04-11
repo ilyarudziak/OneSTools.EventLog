@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OneSTools.EventLog.Exporter.Core;
+using OneSTools.EventLog.Exporter.Core.UserServices;
 
 namespace OneSTools.EventLog.Exporter.Manager
 {
@@ -24,7 +25,14 @@ namespace OneSTools.EventLog.Exporter.Manager
                     logging.AddFile(logPath);
                     logging.AddConfiguration(hostingContext.Configuration.GetSection("Logging"));
                 })
-                .ConfigureServices((_, services) => { services.AddHostedService<ExportersManager>(); });
+                .ConfigureServices((_, services) =>
+                {
+                    services.Configure<UserOptions>(_.Configuration.GetSection("UserCache"));
+                    services.AddTransient<IUserService, UserService>();
+                    services.AddSingleton<IUserCache, UserCache>();
+                    services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
+                    services.AddHostedService<ExportersManager>();
+                });
         }
     }
 }

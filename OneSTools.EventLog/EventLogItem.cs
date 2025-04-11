@@ -14,6 +14,7 @@ namespace OneSTools.EventLog
         public virtual long TransactionNumber { get; set; } = 0;
         public virtual string UserUuid { get; set; } = "";
         public virtual string User { get; set; } = "";
+        public virtual string UserEmail { get; set; } = "";
         public virtual string Computer { get; set; } = "";
         public virtual string Application { get; set; } = "";
         public virtual long Connection { get; set; } = 0;
